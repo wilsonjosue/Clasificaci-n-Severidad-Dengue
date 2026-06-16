@@ -1,0 +1,35 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Datos crudos (pesados / no versionar). Procesados livianos sí se pueden subir.
+data/raw/
+*.csv
+!data/processed/*.csv
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipython/
+
+# Modelos entrenados (pesados)
+*.pkl
+*.joblib
+*.h5
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Variables de entorno
+.env

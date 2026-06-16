@@ -1,0 +1,21 @@
+# Núcleo de datos
+numpy
+pandas
+
+# Visualización
+matplotlib
+seaborn
+
+# Machine Learning
+scikit-learn
+xgboost
+lightgbm
+imbalanced-learn   # SMOTE y manejo de desbalance
+
+# Interpretabilidad
+shap
+
+# Entorno / notebooks
+jupyter
+ipykernel
+nbstripout         # limpiar salidas de notebooks antes de commitear
