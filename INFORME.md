@@ -118,31 +118,128 @@ Por el desbalance, **no usar solo accuracy**:
 
 ## 4. Resultados
 
-- Tabla comparativa de los 5 modelos (media ± desv. en CV).
-- Matrices de confusión del mejor modelo.
-- Curvas ROC/PR.
-- *Feature importance* / SHAP del mejor modelo.
+Se evaluaron los **tres tipos de problema** sobre el mismo dataset, transformándolo según
+cada abordaje, y se usaron las métricas propias de cada uno para decidir si el dataset es
+**adecuado** para ese tipo de tarea.
 
-| Modelo | Acc | Balanced Acc | F1-macro | Recall (Grave) | AUC |
-|---|---|---|---|---|---|
-| Reg. Logística | | | | | |
-| Random Forest | | | | | |
-| XGBoost | | | | | |
-| SVM | | | | | |
-| MLP | | | | | |
+> **Nota de reproducibilidad:** la clasificación se entrenó sobre una muestra estratificada de
+> 30,000 registros (por costo computacional); regresión y clustering usan el dataset completo
+> agregado. Notebooks: `02_Clasificacion.ipynb`, `03_Regresion.ipynb`, `04_Clustering.ipynb`.
+
+### 4.1 Clasificación de severidad — *dataset NO adecuado*
+
+Variable objetivo `severidad` (3 clases), **sin** `diagnostic` (para evitar *leakage*).
+Distribución: 88.9 % *Sin signos* / 10.7 % *Con signos* / **0.39 % *Grave***.
+
+| Modelo | Accuracy | Balanced Acc | F1-macro | Recall *Grave* |
+|---|---|---|---|---|
+| Random Forest | 0.790 | 0.374 | 0.365 | 0.000 |
+| LightGBM | 0.698 | 0.411 | 0.364 | 0.034 |
+| XGBoost | 0.886 | 0.344 | 0.337 | 0.000 |
+| MLP (red neuronal) | 0.887 | 0.342 | 0.333 | 0.000 |
+| Regresión Logística (balanceada) | 0.446 | 0.452 | 0.281 | 0.517 |
+
+**Rangos de referencia vs. resultado:**
+
+| Métrica | ❌ Malo | ⚠️ Aceptable | ✅ Bueno | Resultado |
+|---|---|---|---|---|
+| Accuracy | < 0.889\* | — | — | 0.886–0.887 (no supera el baseline) |
+| Balanced Acc | ≈ 0.33 (azar) | 0.50–0.65 | > 0.65 | 0.34–0.45 ❌ |
+| F1-macro | < 0.40 | 0.50–0.60 | > 0.60 | 0.28–0.37 ❌ |
+| Recall *Grave* | < 0.30 | 0.50–0.70 | > 0.70 | 0.00 (0.52 solo Log. balanceada) ❌ |
+
+\* *El baseline trivial "predecir siempre Sin signos" ya alcanza 0.889; ningún modelo lo supera.*
+
+**Conclusión:** con las variables disponibles (edad, sexo, semana, año, departamento) **no
+existe señal suficiente** para predecir la severidad clínica. Los modelos solo aprenden a
+predecir la clase mayoritaria (recall de *Grave* = 0). Es un resultado negativo válido y
+reportable.
+
+### 4.2 Regresión / serie temporal — *dataset ADECUADO*
+
+Se agregó el dataset a **casos por semana epidemiológica** (1,305 puntos, 2000–2024) y se
+predijo el valor de la semana siguiente con **ventanas de tiempo** (lags).
+
+**Selección de ventana óptima (método tipo codo):** se eligió **W = 10 semanas**.
+
+| Modelo | R² | RMSE | MAE |
+|---|---|---|---|
+| **Ridge / Lineal** | **0.976** | 659 | 272 |
+| Lasso | 0.976 | 659 | 272 |
+| Random Forest | 0.427 | 3220 | 1074 |
+| Gradient Boosting | 0.353 | 3421 | 1154 |
+
+**Rangos de referencia vs. resultado:**
+
+| Métrica | ❌ Malo | ⚠️ Moderado | ✅ Bueno/Excelente | Resultado |
+|---|---|---|---|---|
+| R² | < 0.5 | 0.5–0.7 | 0.7–0.9 / > 0.9 | **0.976** ✅ |
+| ¿Supera baseline ingenuo? | no | — | sí | R² 0.976 > 0.959; MAE 272 < 383 ✅ |
+| MAE relativo a la media (789) | > 50 % | 20–50 % | < 20 % | 34.5 % ⚠️ |
+
+**Por qué los lineales ganan a los árboles:** la serie tiene una fuerte tendencia creciente
+por el brote 2023–2024 (de ~63k casos/año en 2022 a ~257k y ~272k en 2023–2024). Los árboles
+**no extrapolan** fuera del rango visto en entrenamiento, mientras que los modelos lineales
+autorregresivos sí siguen la tendencia. *Insight* relevante para el paper.
+
+**Validez del dato (target = casos/semana):** el valor no es sintético ni imputado; es un
+**conteo directo** de registros reales (`GROUP BY año, semana` + `COUNT`). Verificación:
+
+| Comprobación | Resultado |
+|---|---|
+| Σ casos de la serie = nº de registros del CSV | 1,029,421 = 1,029,421 ✅ |
+| Semanas faltantes rellenadas artificialmente | NINGUNA (serie continua) ✅ |
+| Verificación manual (2000, semana 5) | 59 registros reales = serie 59 ✅ |
+
+> Única limitación de la fuente (no introducida por nosotros): los conteos dependen de la
+> vigilancia pasiva del MINSA, con posible subregistro.
+
+### 4.3 Clustering de departamentos — *adecuado solo tras limpieza*
+
+Se construyó un perfil por departamento (volumen, edad media, % femenino, tasa de severidad,
+semana pico) y se agrupó con KMeans / Jerárquico, validando con PCA.
+
+| Métrica | ❌ Sin estructura | ⚠️ Débil | ✅ Razonable/Fuerte | Resultado |
+|---|---|---|---|---|
+| Silhouette | < 0.25 | 0.25–0.50 | 0.50–0.70 / > 0.70 | 0.547 |
+| Davies-Bouldin (menor = mejor) | > 2 | 1–2 | < 1 | 0.309 |
+
+**Advertencia:** aunque las métricas son "buenas", con `k=2` el algoritmo solo aísla
+**MOQUEGUA (1 solo caso en 25 años, dato atípico)** frente a los otros 22 departamentos → el
+resultado es **trivial**. Requiere filtrar departamentos con muy pocos casos y/o aplicar
+escala logarítmica al volumen para obtener agrupaciones interpretables.
+
+### 4.4 Síntesis: ¿para qué abordaje es adecuado el dataset?
+
+| Abordaje | Métrica principal | Resultado | Veredicto |
+|---|---|---|---|
+| Clasificación | F1-macro / Recall *Grave* | 0.33 / 0.00 | ❌ No adecuado |
+| **Regresión (serie temporal)** | R² | **0.976** | ✅ **Adecuado** |
+| Clustering | Silhouette | 0.547 (degenerado) | ⚠️ Solo tras limpieza |
 
 ## 5. Discusión e *Insights*
 
-- ¿Qué variables pesan más? (edad, semana/estacionalidad, departamento).
-- Patrones temporales (brotes) y geográficos.
-- Desempeño en la clase minoritaria *Grave*.
-- Limitaciones: posible *leakage*, calidad del registro, vigilancia pasiva, sesgos.
+- **Insight 1 (metodológico):** evaluar los tres abordajes con sus métricas permite *demostrar*
+  con evidencia para qué sirve el dataset, en lugar de asumirlo. El dengue, registrado como
+  casos individuales, **no** tiene señal para clasificar severidad, pero **sí** tiene una
+  estructura temporal muy fuerte.
+- **Insight 2 (epidemiológico):** la mejor predicción de los casos de una semana son los de las
+  semanas previas (autocorrelación) → confirma la dinámica de propagación de la epidemia.
+- **Insight 3 (brote):** el salto 2023–2024 explica por qué los modelos de árboles fallan (no
+  extrapolan) y los lineales autorregresivos triunfan.
+- **Limitaciones:** *leakage* evitado al excluir `diagnostic`; desbalance extremo (*Grave* 0.39 %);
+  vigilancia pasiva con posible subregistro; un departamento atípico (MOQUEGUA) distorsiona el
+  clustering.
 
 ## 6. Conclusiones y Trabajo Futuro
 
-- Mejor modelo y justificación.
-- Aplicabilidad para salud pública.
-- Trabajo futuro: variables climáticas, modelos temporales, predicción de brotes.
+- **El dataset es adecuado para regresión / serie temporal** (R² = 0.976, supera el baseline
+  ingenuo), **no para clasificación** de severidad (recall de *Grave* = 0), y para clustering
+  solo tras limpiar outliers.
+- **Aplicabilidad:** modelo de **alerta temprana** de casos de dengue por semana, útil para que
+  salud pública anticipe brotes y asigne recursos.
+- **Trabajo futuro:** comparar con **LSTM** (referencia en series temporales), incorporar
+  variables exógenas (clima, temperatura, lluvias), y desagregar la predicción por departamento.
 
 ## Referencias
 
@@ -167,9 +264,14 @@ Por el desbalance, **no usar solo accuracy**:
 **Checklist del enunciado:**
 - [x] Tema con ≥ 10 mil registros (~1M ✔)
 - [x] ≥ 10 características interesantes (sin contar nombre/dirección/ubigeo)
-- [x] Tipo de problema definido (clasificación)
+- [x] Tipo de problema definido (los 3 evaluados; **regresión** es el adecuado)
 - [ ] Estado del arte documentado
-- [ ] 5 técnicas comparadas
+- [x] 5 técnicas comparadas (por abordaje)
 - [x] EDA
-- [ ] Comparación con métricas
-- [ ] Insights
+- [x] Comparación con métricas
+- [x] Insights
+
+> ⚠️ **Pendiente de decisión del equipo:** los **Metadatos** y el **Título** de arriba todavía
+> dicen "clasificación de severidad". Dado que el dataset resultó adecuado para **regresión /
+> serie temporal**, conviene reenfocar el título y el objetivo hacia *predicción de casos de
+> dengue* si se mantiene este dataset.
