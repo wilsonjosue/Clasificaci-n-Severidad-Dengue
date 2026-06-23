@@ -10,9 +10,10 @@
 
 | Campo | Valor |
 |---|---|
-| **Título tentativo** | *Evaluation of Machine Learning Algorithms to Classify Dengue Severity from Epidemiological Surveillance Data in Peru (2000–2024)* |
-| **Tipo de problema** | Clasificación supervisada multiclase (3 clases) |
-| **Variable objetivo** | `severidad` ∈ {Sin signos, Con signos, Grave} |
+| **Título tentativo** | *Weekly Dengue Case Forecasting in Peru Using Regression and Time-Series Machine Learning Models (2000–2024)* |
+| **Tipo de problema** | Regresión / serie temporal (predicción de casos por semana) |
+| **Variable objetivo** | `casos` = nº de casos de dengue por semana epidemiológica (conteo agregado) |
+| **Enfoque** | Se evaluaron los 3 abordajes (clasificación, regresión, clustering); las métricas mostraron que el dataset es adecuado para **regresión / serie temporal** |
 | **Fuente de datos** | [Datos Abiertos – Vigilancia Epidemiológica de Dengue (MINSA/CDC Perú)](https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol%C3%B3gica-de-dengue) |
 | **N.º de registros** | ~1,029,421 |
 | **Periodo** | 2000–2024 |
@@ -24,23 +25,25 @@
 ## Resumen (Abstract)
 
 > _150–250 palabras. Redactar al final, cuando estén los resultados._
-> Estructura: contexto (dengue como problema de salud pública) → objetivo (clasificar la
-> severidad clínica) → datos (vigilancia 2000–2024, ~1M registros) → métodos (5 algoritmos
-> comparados + manejo del desbalance) → resultado principal (mejor modelo y métrica) →
-> implicancia (apoyo a triaje/priorización epidemiológica).
+> Estructura: contexto (dengue como problema de salud pública) → objetivo (predecir el nº de
+> casos por semana para alerta temprana) → datos (vigilancia 2000–2024, ~1M registros agregados
+> a serie semanal) → métodos (comparación de modelos de regresión con ventanas de tiempo) →
+> resultado principal (Ridge/Lineal, R² = 0.976, supera al baseline ingenuo) →
+> implicancia (anticipación de brotes y asignación de recursos).
 
-**Palabras clave:** dengue, clasificación multiclase, aprendizaje automático, salud pública, Perú, desbalance de clases.
+**Palabras clave:** dengue, regresión, serie temporal, predicción de casos, aprendizaje automático, salud pública, Perú.
 
 ---
 
 ## 1. Introducción
 
 - Contexto del dengue en Perú (transmisión por *Aedes aegypti*, brotes, regiones endémicas: Loreto, Piura, etc.).
-- Problema: anticipar/clasificar la **severidad** del caso ayuda al triaje y a la priorización de recursos.
+- Problema: **anticipar el número de casos** por semana permite la alerta temprana de brotes y la priorización de recursos.
 - Brecha: _¿qué falta en los trabajos previos?_ (ver sección 2).
-- **Objetivo general:** comparar 5 algoritmos de ML para clasificar la severidad del dengue.
-- **Objetivos específicos:** (1) EDA, (2) preprocesamiento y manejo del desbalance, (3) entrenamiento, (4) comparación con métricas, (5) generación de *insights*.
-- **Contribución:** comparación reproducible sobre un dataset nacional de 24 años.
+- **Objetivo general:** predecir el número de casos de dengue por semana epidemiológica mediante modelos de regresión / serie temporal.
+- **Objetivos específicos:** (1) EDA, (2) agregación a serie temporal y construcción de ventanas, (3) entrenamiento, (4) comparación con métricas (R², RMSE, MAE), (5) generación de *insights*.
+- **Nota metodológica:** se evaluaron también clasificación y clustering; las métricas demostraron que el dataset es adecuado para **regresión** (ver Sección 4), justificando este enfoque.
+- **Contribución:** comparación reproducible y modelo de alerta temprana sobre un dataset nacional de 25 años.
 
 ## 2. Estado del Arte / Trabajos Relacionados
 
@@ -271,7 +274,7 @@ escala logarítmica al volumen para obtener agrupaciones interpretables.
 - [x] Comparación con métricas
 - [x] Insights
 
-> ⚠️ **Pendiente de decisión del equipo:** los **Metadatos** y el **Título** de arriba todavía
-> dicen "clasificación de severidad". Dado que el dataset resultó adecuado para **regresión /
-> serie temporal**, conviene reenfocar el título y el objetivo hacia *predicción de casos de
-> dengue* si se mantiene este dataset.
+> ✅ **Enfoque decidido:** el proyecto se centra en **regresión / serie temporal** (predicción de
+> casos de dengue por semana), porque las métricas demostraron que es el único abordaje adecuado
+> para este dataset. La clasificación y el clustering se reportan como experimentos comparativos
+> que justifican esa elección.
