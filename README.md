@@ -1,41 +1,68 @@
-# Proyecto Final IA — Clasificación de Severidad de Dengue (Perú, 2000–2024)
+# Proyecto Final IA — Predicción semanal de casos de Dengue (Perú, 2000–2024)
 
-Comparación de algoritmos de Machine Learning para clasificar la severidad clínica del
-dengue a partir de datos de vigilancia epidemiológica del MINSA. Trabajo orientado a
-**SIMBIG 2026**.
+Predicción del **número de casos de dengue por semana** (regresión / serie temporal) a partir de
+los datos de vigilancia epidemiológica del MINSA, como base para un **sistema de alerta temprana**.
+Se evaluaron los tres tipos de problema (clasificación, regresión, clustering) y las métricas
+mostraron que el dataset es adecuado para **regresión**. Trabajo orientado a **SIMBIG 2026**.
 
-- 📄 Informe / documentación: [INFORME.md](INFORME.md)
+- 📄 Informe (español): [INFORME.md](INFORME.md)
+- 📝 Paper (inglés, borrador): [PAPER.md](PAPER.md)
+- 🗺️ Plan de trabajo: [Avance/PlanGeneral.md](Avance/PlanGeneral.md)
 - 📊 Fuente: [Datos Abiertos – Vigilancia Epidemiológica de Dengue](https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol%C3%B3gica-de-dengue)
+
+## Resultados principales
+
+Se agregó el dataset (1,029,421 registros) a una **serie semanal** de casos (1,305 puntos,
+2000–2024) y se comparó la predicción a **1 semana** (ventana de entrada `W=3`, horizonte `H=1`):
+
+| Modelo | R² | RMSE |
+|---|---|---|
+| **Ridge (mejor)** | **0.975** | 671 |
+| Lasso | 0.975 | 671 |
+| Perceptrón (MLP) | 0.972 | 708 |
+| LSTM | 0.560 | 2817 |
+| Random Forest | 0.444 | 3167 |
+| Gradient Boosting | 0.374 | 3359 |
+
+*Baseline ingenuo (persistencia): R² 0.959.* Los modelos lineales regularizados ganan y superan
+al baseline. La **clasificación** (F1-macro 0.33) y el **clustering** (Silhouette 0.35) resultaron
+inadecuados → **regresión es el único abordaje válido** para este dataset.
 
 ## Estructura del repositorio
 
 ```
 Proyecto-final-IA/
 ├── README.md                       # Este archivo
-├── INFORME.md                      # Informe de investigación (documento de trabajo)
+├── INFORME.md                      # Informe de investigación (español)
+├── PAPER.md                        # Paper para SIMBIG (inglés, borrador)
 ├── requirements.txt                # Dependencias del entorno
 ├── .gitignore                      # Ignora venv, datos crudos, checkpoints, etc.
+├── Avance/
+│   ├── PlanGeneral.md              # Plan de trabajo vigente (por fases)
+│   ├── contexto.md                 # Enunciado + observaciones del profesor
+│   └── avances.md                  # Plan anterior (obsoleto, enfoque viejo)
 ├── data/
 │   ├── raw/                        # Datos ORIGINALES (NO se suben a git)
 │   │   └── datos_abiertos_vigilancia_dengue_2000_2024.csv
-│   └── processed/                  # Datos limpios derivados del EDA (.gitkeep)
+│   └── processed/                  # Dataset limpio derivado del EDA (.gitkeep)
 ├── notebooks/
-│   ├── 01_EDA_Dengue.ipynb         # EDA (antes Avance1_EDA_Dengue.ipynb)
-│   ├── 02_preprocesamiento.ipynb   # (pendiente Avance 2)
-│   ├── 03_modelado.ipynb           # Entrenamiento de los 5 modelos (pendiente)
-│   └── 04_evaluacion.ipynb         # Comparación + insights (pendiente)
+│   ├── 01_EDA_Dengue.ipynb         # EDA general
+│   ├── 02_Clasificacion.ipynb      # Experimento secundario: clasificación de severidad
+│   ├── 03_Regresion.ipynb          # ★ Abordaje principal: serie temporal (6 técnicas + LSTM)
+│   └── 04_Clustering.ipynb         # Experimento secundario: clustering de departamentos
 ├── src/                            # Código reutilizable (funciones, no notebooks)
 │   ├── data.py                     # Carga y limpieza
 │   ├── features.py                 # Ingeniería de variables / encoding
-│   ├── models.py                   # Definición de los 5 modelos
+│   ├── models.py                   # Definición de modelos
 │   └── evaluate.py                 # Métricas y gráficos
+├── Ejemplos/                       # Notebooks de referencia del profesor
 └── reports/
     └── figures/                    # Gráficos exportados para el paper (.gitkeep)
 ```
 
-> Los notebooks `02`–`04` aún no existen; se crearán en el Avance 2.
-> El notebook `01_EDA_Dengue.ipynb` ya tiene las rutas ajustadas a esta estructura
-> (`../data/raw/...` para leer y `../data/processed/...` para guardar el dataset limpio).
+> **Notebook principal:** `03_Regresion.ipynb`. Los notebooks `02` y `04` son experimentos
+> comparativos que justifican la elección de la regresión. Todos leen de `data/raw/` y están
+> conectados al kernel `dengue-ia`.
 
 ## ⚠️ Sobre el dataset (importante para GitHub)
 
@@ -67,12 +94,15 @@ source .venv/Scripts/activate
 #    Linux / macOS:
 #    source .venv/bin/activate
 
-# 3. Instalar dependencias
+# 3. Instalar dependencias (incluye TensorFlow para el LSTM; descarga pesada)
 pip install -r requirements.txt
 
 # 4. (opcional) Registrar el kernel para Jupyter
 python -m ipykernel install --user --name=dengue-ia
 ```
+
+> Probado con **Python 3.12**. Si `pip` falla por certificados SSL, añade:
+> `--trusted-host pypi.org --trusted-host files.pythonhosted.org`.
 
 ## Guía paso a paso en Visual Studio Code (entorno virtual + notebook)
 
@@ -98,7 +128,7 @@ Esta guía conecta el entorno virtual con `notebooks/01_EDA_Dengue.ipynb`.
 
 ### C. Seleccionar el intérprete del proyecto
 1. `Ctrl+Shift+P` → escribe **"Python: Select Interpreter"**.
-2. Elige el que diga `.venv` (ruta `.\.venv\Scripts\python.exe`). Recomendado **3.11**.
+2. Elige el que diga `.venv` (ruta `.\.venv\Scripts\python.exe`). Probado con **Python 3.12**.
 
 ### D. Verificar el dataset
 - Confirma que existe `data/raw/datos_abiertos_vigilancia_dengue_2000_2024.csv`.
@@ -106,14 +136,12 @@ Esta guía conecta el entorno virtual con `notebooks/01_EDA_Dengue.ipynb`.
   [portal](https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol%C3%B3gica-de-dengue)
   y colócalo en `data/raw/`.
 
-### E. Ejecutar el notebook de EDA
-1. Abre `notebooks/01_EDA_Dengue.ipynb`.
-2. Arriba a la derecha, en **"Select Kernel"**, elige el intérprete `.venv`
-   (o el kernel `dengue-ia` si lo registraste).
-3. Ejecuta:
-   - Celda por celda con `Shift+Enter`, o
-   - Todo con el botón **"Run All"** de la barra superior del notebook.
-4. Al terminar, se genera `data/processed/dengue_limpio_avance1.csv` (insumo del Avance 2).
+### E. Ejecutar los notebooks
+1. Abre el notebook deseado. **El principal es `notebooks/03_Regresion.ipynb`**; `02` y `04`
+   son los experimentos comparativos y `01` es el EDA general.
+2. Arriba a la derecha, en **"Select Kernel"**, elige **Python (dengue-ia)** (o el `.venv`).
+3. Ejecuta con **"Run All"** (o celda por celda con `Shift+Enter`).
+4. Todos los notebooks leen el dataset desde `data/raw/` automáticamente.
 
 ### F. Usar el código de `src/` desde un notebook (opcional)
 Al inicio del notebook puedes reutilizar las funciones del paquete `src`:
@@ -154,9 +182,9 @@ df = normalizar_edad(df)
 
 | Tarea | Responsable |
 |---|---|
-| EDA y limpieza | |
-| Preprocesamiento + manejo de desbalance | |
-| Modelos 1–3 (LogReg, RF, XGBoost) | |
-| Modelos 4–5 (SVM, MLP) | |
-| Evaluación, métricas e insights | |
-| Redacción del paper (inglés) | |
+| EDA general y de serie temporal | |
+| Regresión: ventanas (W, H) + modelos lineales y árboles | |
+| Regresión: LSTM y comparación de técnicas | |
+| Experimentos comparativos (clasificación + clustering) | |
+| Estado del arte y citas bibliográficas | |
+| Redacción/traducción del paper (inglés, plantilla SIMBIG) | |
