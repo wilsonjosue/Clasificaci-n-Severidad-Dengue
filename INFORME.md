@@ -28,7 +28,7 @@
 > Estructura: contexto (dengue como problema de salud pública) → objetivo (predecir el nº de
 > casos por semana para alerta temprana) → datos (vigilancia 2000–2024, ~1M registros agregados
 > a serie semanal) → métodos (comparación de modelos de regresión con ventanas de tiempo) →
-> resultado principal (Ridge/Lineal, R² = 0.976, supera al baseline ingenuo) →
+> resultado principal (Ridge, R² = 0.975, supera al baseline ingenuo y al LSTM) →
 > implicancia (anticipación de brotes y asignación de recursos).
 
 **Palabras clave:** dengue, regresión, serie temporal, predicción de casos, aprendizaje automático, salud pública, Perú.
@@ -47,14 +47,34 @@
 
 ## 2. Estado del Arte / Trabajos Relacionados
 
-> Objetivo del docente: **buscar el estado del arte**. Llenar esta tabla con ≥ 6–8 referencias.
+La predicción de casos de dengue mediante *machine learning* y series temporales es un campo
+activo, especialmente para **sistemas de alerta temprana**. La literatura muestra tres líneas
+relevantes para este trabajo:
 
-| Ref. | Año | Datos / país | Técnicas | Métrica reportada | Limitación |
+1. **Pronóstico semanal de casos como serie temporal**, con foco en vigilancia epidemiológica.
+2. **Modelos de aprendizaje profundo (LSTM)**, frecuentemente potenciados con **variables
+   climáticas** y de **movilidad**, y a menudo en configuraciones de **ensamble**.
+3. **Perú (especialmente Iquitos)** aparece de forma recurrente como sitio de estudio.
+
+| Ref. | Año | Datos / país | Técnicas | Hallazgo / Métrica | Relación con nuestro trabajo |
 |---|---|---|---|---|---|
-| _(autor)_ | | | | | |
+| [1] Iquitos/San Juan/Singapur | ~2019 | Vigilancia semanal + clima (1990–2016) | ML, regresión y series temporales | Pronóstico semanal de casos y brotes; evalúa el aporte de la vigilancia vs. clima | Mismo objetivo (casos/semana) e incluye **Perú (Iquitos)** |
+| [2] Rio de Janeiro, Brasil | 2024 | Casos + clima | Estadísticos vs. ML; **LSTM**, ARIMA, ensamble | LSTM fue el mejor ML (con clima); el **ensamble LSTM+ARIMA** mejoró aún más | Compara LSTM vs. clásicos, como nosotros |
+| [3] Ensamble reproducible | 2024 | Brasil → transferido a **Perú** | Ensamble de ML, espacio-temporal | Estimación de incidencia a 1 mes a nivel estatal; **transferible a Perú** | Refuerza el enfoque de alerta temprana en Perú |
+| [4] Brasil (movilidad+clima) | 2025 | Casos + movilidad + clima | **LSTM** | Marco escalable de pronóstico y detección de brotes | LSTM como referencia; muestra el valor de variables exógenas |
+| [5] Jaipur, India | 2025 | Casos + clima complejo | Aprendizaje profundo | Predicción de pacientes bajo condiciones climáticas variables | Deep learning para dengue |
+| [6] Revisión Latinoamérica | 2022 | Múltiples países | Revisión de ML (*One Health*) | Síntesis de técnicas y variables usadas en la región | Contexto regional |
+| [7] Bangladesh | 2025 | Casos (temporal y espacial) | Híbrido bayesiano + ML | Sistema de alerta temprana | Mismo fin (early warning) |
 
-- Buscar en: Google Scholar, PubMed, Scopus, arXiv. Términos: *"dengue severity prediction machine learning"*, *"dengue classification surveillance data"*.
-- Revisar trabajos previos de SIMBIG (CEUR-WS / Springer) para alinear estilo y baseline.
+**Brecha y posicionamiento de nuestro trabajo:** la mayoría de estudios incorporan **variables
+climáticas/movilidad** y reportan que **LSTM** suele ganar. Nuestro trabajo usa **solo el
+historial de casos** del dataset nacional del MINSA (2000–2024, ~1M registros) y muestra que, en
+ese escenario y a **horizonte de 1 semana**, los **modelos lineales simples (Ridge/Lasso) superan
+al LSTM** por la fuerte autocorrelación. Esto aporta un *baseline* reproducible y la observación
+de que la complejidad del LSTM solo se justifica al añadir variables exógenas (trabajo futuro).
+
+> ⚠️ *Pendiente del equipo:* completar las **citas bibliográficas completas** (autores, revista)
+> a partir de los enlaces de la sección Referencias y darles formato SIMBIG.
 
 ## 3. Materiales y Métodos
 
@@ -104,27 +124,29 @@ Diccionario de variables (✔ = candidata a *feature*; ✘ = identificador/no v�
 - ⚠️ En series temporales **no** se usa un split aleatorio ni validación cruzada estándar; si se
   valida en varias ventanas, debe hacerse con *time-series split* (hacia adelante).
 
-### 3.4 Algoritmos comparados (5 técnicas de regresión)
+### 3.4 Algoritmos comparados (6 técnicas de regresión)
 
 | # | Técnica | Familia | Notas |
 |---|---|---|---|
-| 1 | Regresión Lineal | Lineal | *Baseline* interpretable; sigue la tendencia |
-| 2 | Ridge (L2) | Lineal regularizada | Maneja multicolinealidad de los lags |
-| 3 | Lasso (L1) | Lineal regularizada | Selección de variables (lags relevantes) |
+| 1 | Ridge (L2) | Lineal regularizada | Maneja multicolinealidad de los lags; **mejor modelo** |
+| 2 | Lasso (L1) | Lineal regularizada | Selección de variables (lags relevantes) |
+| 3 | Perceptrón (MLP) | Red neuronal | Capta no linealidades; requiere escalado |
 | 4 | Random Forest Regressor | Ensamble (bagging) | No extrapola la tendencia (limitación observada) |
 | 5 | Gradient Boosting Regressor | Ensamble (boosting) | Potente en patrones no lineales |
+| 6 | **LSTM** | Red recurrente | Técnica de referencia para series temporales |
 
-> *Trabajo futuro:* comparar con **LSTM**, técnica de referencia para series temporales.
 > *Experimentos secundarios:* clasificación (Reg. Logística, Random Forest, XGBoost, LightGBM,
 > MLP) y clustering (K-means, jerárquico) — ver Secciones 4.1 y 4.3.
 
-### 3.5 Métricas de evaluación (regresión)
+### 3.5 Métricas y selección de ventanas (regresión)
 
 - **R²** (coeficiente de determinación): proporción de varianza explicada (principal).
 - **RMSE** (penaliza más los errores grandes) y **MAE** (en las unidades de `casos`).
-- **Comparación con baseline ingenuo** (persistencia: `casos[t] = casos[t-1]`): el modelo debe
+- **Comparación con baseline ingenuo** (persistencia: `casos[t+H] = casos[t]`): el modelo debe
   superarlo para aportar valor.
-- **Selección de la ventana óptima** por método tipo codo (RMSE vs. tamaño de ventana).
+- **Doble selección de ventana por método tipo codo** (ver §4.2):
+  - **Ventana de entrada `W`** (error decreciente → codo de rendimientos decrecientes).
+  - **Horizonte `H`** (error creciente → mayor horizonte confiable).
 
 > *Métricas de los experimentos secundarios:* clasificación → F1-macro, balanced accuracy,
 > recall por clase y matriz de confusión; clustering → Silhouette y Davies-Bouldin.
@@ -168,32 +190,50 @@ existe señal suficiente** para predecir la severidad clínica. Los modelos solo
 predecir la clase mayoritaria (recall de *Grave* = 0). Es un resultado negativo válido y
 reportable.
 
-### 4.2 Regresión / serie temporal — *dataset ADECUADO*
+### 4.2 Regresión / serie temporal — *dataset ADECUADO* (abordaje principal)
 
-Se agregó el dataset a **casos por semana epidemiológica** (1,305 puntos, 2000–2024) y se
-predijo el valor de la semana siguiente con **ventanas de tiempo** (lags).
+Se agregó el dataset a **casos por semana epidemiológica** (1,305 puntos continuos, 2000–2024).
 
-**Selección de ventana óptima (método tipo codo):** se eligió **W = 10 semanas**.
+**Doble análisis de ventana** (se distinguen dos conceptos que se comportan de forma opuesta):
 
-| Modelo | R² | RMSE | MAE |
+| Ventana | Comportamiento del error | Selección | Resultado |
 |---|---|---|---|
-| **Ridge / Lineal** | **0.976** | 659 | 272 |
-| Lasso | 0.976 | 659 | 272 |
-| Random Forest | 0.427 | 3220 | 1074 |
-| Gradient Boosting | 0.353 | 3421 | 1154 |
+| **Entrada `W`** (semanas de historia usadas) | **Baja y se aplana** (RMSE 864→671→660) | Codo de rendimientos decrecientes | **W = 3 semanas** |
+| **Horizonte `H`** (semanas hacia el futuro) | **Crece** (RMSE 671→1150→…→4664) | Mayor `H` con error aceptable | **H = 1 semana** |
+
+> **Nota técnica (corrección tras la 2.ª revisión):** la afirmación *"el error crece con la
+> ventana"* es rigurosa para el **horizonte `H`**, no para la ventana de entrada `W` (donde más
+> historia ayuda). Reportar ambos análisis hace el trabajo técnicamente correcto y a la vez
+> muestra la curva creciente esperada. El horizonte `H = 1` define la **capacidad de alerta
+> temprana** (predicción confiable a 1 semana).
+
+**Comparación de 6 técnicas** (configuración W=3, H=1):
+
+| Modelo | R² | RMSE | MAE | ¿Supera baseline? |
+|---|---|---|---|---|
+| **Ridge (L2)** | **0.975** | 671 | 278 | ✅ |
+| Lasso (L1) | 0.975 | 671 | 278 | ✅ |
+| Perceptrón (MLP) | 0.972 | 708 | 297 | ✅ |
+| LSTM (referencia) | 0.560 | 2817 | 915 | ❌ |
+| Random Forest | 0.444 | 3167 | 1054 | ❌ |
+| Gradient Boosting | 0.374 | 3359 | 1128 | ❌ |
+
+*Baseline ingenuo (persistencia): R² 0.959, RMSE 862, MAE 383.*
 
 **Rangos de referencia vs. resultado:**
 
 | Métrica | ❌ Malo | ⚠️ Moderado | ✅ Bueno/Excelente | Resultado |
 |---|---|---|---|---|
-| R² | < 0.5 | 0.5–0.7 | 0.7–0.9 / > 0.9 | **0.976** ✅ |
-| ¿Supera baseline ingenuo? | no | — | sí | R² 0.976 > 0.959; MAE 272 < 383 ✅ |
-| MAE relativo a la media (789) | > 50 % | 20–50 % | < 20 % | 34.5 % ⚠️ |
+| R² | < 0.5 | 0.5–0.7 | 0.7–0.9 / > 0.9 | **0.975** ✅ |
+| ¿Supera baseline ingenuo? | no | — | sí | R² 0.975 > 0.959; RMSE 671 < 862 ✅ |
 
-**Por qué los lineales ganan a los árboles:** la serie tiene una fuerte tendencia creciente
-por el brote 2023–2024 (de ~63k casos/año en 2022 a ~257k y ~272k en 2023–2024). Los árboles
-**no extrapolan** fuera del rango visto en entrenamiento, mientras que los modelos lineales
-autorregresivos sí siguen la tendencia. *Insight* relevante para el paper.
+**Hallazgos clave:**
+- **LSTM no superó a los modelos lineales.** Pese a ser la técnica de referencia, en esta serie
+  —con autocorrelación muy alta (lag-1 = 0.982) y horizonte de 1 semana— los modelos lineales,
+  que se anclan al último valor, son superiores; el LSTM además sufre con el brote 2023–2024
+  (magnitudes nunca vistas en entrenamiento). *Más complejidad no siempre es mejor.*
+- **Los árboles (RF, GB) fallan** porque **no extrapolan** la tendencia del brote (de ~63k
+  casos/año en 2022 a ~257k y ~272k en 2023–2024).
 
 **Validez del dato (target = casos/semana):** el valor no es sintético ni imputado; es un
 **conteo directo** de registros reales (`GROUP BY año, semana` + `COUNT`). Verificación:
@@ -207,28 +247,36 @@ autorregresivos sí siguen la tendencia. *Insight* relevante para el paper.
 > Única limitación de la fuente (no introducida por nosotros): los conteos dependen de la
 > vigilancia pasiva del MINSA, con posible subregistro.
 
-### 4.3 Clustering de departamentos — *adecuado solo tras limpieza*
+### 4.3 Clustering de departamentos — *estructura DÉBIL (no adecuado)*
 
 Se construyó un perfil por departamento (volumen, edad media, % femenino, tasa de severidad,
 semana pico) y se agrupó con KMeans / Jerárquico, validando con PCA.
 
-| Métrica | ❌ Sin estructura | ⚠️ Débil | ✅ Razonable/Fuerte | Resultado |
-|---|---|---|---|---|
-| Silhouette | < 0.25 | 0.25–0.50 | 0.50–0.70 / > 0.70 | 0.547 |
-| Davies-Bouldin (menor = mejor) | > 2 | 1–2 | < 1 | 0.309 |
+**Corrección metodológica:** se **excluyeron 4 departamentos andinos/fríos con casos casi nulos**
+(MOQUEGUA=1, APURIMAC=11, AREQUIPA=28, PUNO=647), donde el *Aedes aegypti* casi no vive y que
+**inflaban artificialmente** el Silhouette (un cluster aislaba a MOQUEGUA). Además se aplicó
+**escala logarítmica** al volumen. Quedan 19 departamentos.
 
-**Advertencia:** aunque las métricas son "buenas", con `k=2` el algoritmo solo aísla
-**MOQUEGUA (1 solo caso en 25 años, dato atípico)** frente a los otros 22 departamentos → el
-resultado es **trivial**. Requiere filtrar departamentos con muy pocos casos y/o aplicar
-escala logarítmica al volumen para obtener agrupaciones interpretables.
+| Métrica | ❌ Sin estructura | ⚠️ Débil | ✅ Razonable/Fuerte | Resultado (corregido) |
+|---|---|---|---|---|
+| Silhouette | < 0.25 | 0.25–0.50 | 0.50–0.70 / > 0.70 | **0.35** ⚠️ |
+| Davies-Bouldin (menor = mejor) | > 2 | 1–2 | < 1 | **1.12** ⚠️ |
+
+**Conclusión:** una vez corregidos los outliers, la estructura de clusters es **débil**. Los dos
+grupos se diferencian sobre todo por la **semana pico** (regiones de pico temprano ~semana 14 vs.
+tardío ~semana 40), no por perfiles cualitativos marcados. El dataset **no es claramente adecuado
+para clustering**.
 
 ### 4.4 Síntesis: ¿para qué abordaje es adecuado el dataset?
 
 | Abordaje | Métrica principal | Resultado | Veredicto |
 |---|---|---|---|
 | Clasificación | F1-macro / Recall *Grave* | 0.33 / 0.00 | ❌ No adecuado |
-| **Regresión (serie temporal)** | R² | **0.976** | ✅ **Adecuado** |
-| Clustering | Silhouette | 0.547 (degenerado) | ⚠️ Solo tras limpieza |
+| **Regresión (serie temporal)** | R² | **0.975** | ✅ **Adecuado** |
+| Clustering | Silhouette | 0.35 (estructura débil) | ⚠️ No adecuado |
+
+> Los tres experimentos, todos con metodología correcta, **confirman que la regresión / serie
+> temporal es el único abordaje claramente adecuado** para este dataset.
 
 ## 5. Discusión e *Insights*
 
@@ -240,25 +288,40 @@ escala logarítmica al volumen para obtener agrupaciones interpretables.
   semanas previas (autocorrelación) → confirma la dinámica de propagación de la epidemia.
 - **Insight 3 (brote):** el salto 2023–2024 explica por qué los modelos de árboles fallan (no
   extrapolan) y los lineales autorregresivos triunfan.
+- **Insight 4 (LSTM):** la técnica de referencia para series temporales **no fue la mejor** aquí.
+  Con autocorrelación muy alta y horizonte de 1 semana, los modelos lineales simples ganan →
+  *más complejidad no siempre es mejor*.
+- **Insight 5 (ventana):** distinguir la **ventana de entrada** (error decreciente) del
+  **horizonte** (error creciente) es clave; confundirlos lleva a conclusiones erróneas.
 - **Limitaciones:** *leakage* evitado al excluir `diagnostic`; desbalance extremo (*Grave* 0.39 %);
-  vigilancia pasiva con posible subregistro; un departamento atípico (MOQUEGUA) distorsiona el
-  clustering.
+  vigilancia pasiva con posible subregistro; clustering con estructura débil incluso tras corregir
+  los departamentos atípicos.
 
 ## 6. Conclusiones y Trabajo Futuro
 
-- **El dataset es adecuado para regresión / serie temporal** (R² = 0.976, supera el baseline
-  ingenuo), **no para clasificación** de severidad (recall de *Grave* = 0), y para clustering
-  solo tras limpiar outliers.
+- **El dataset es adecuado para regresión / serie temporal** (Ridge, R² = 0.975, supera el
+  baseline ingenuo), **no para clasificación** de severidad (recall de *Grave* = 0), ni para
+  clustering (estructura débil, Silhouette = 0.35 tras corregir outliers).
+- **Mejor modelo:** lineal regularizado (Ridge/Lasso), simple e interpretable, que superó incluso
+  al LSTM en el pronóstico a 1 semana.
 - **Aplicabilidad:** modelo de **alerta temprana** de casos de dengue por semana, útil para que
   salud pública anticipe brotes y asigne recursos.
-- **Trabajo futuro:** comparar con **LSTM** (referencia en series temporales), incorporar
-  variables exógenas (clima, temperatura, lluvias), y desagregar la predicción por departamento.
+- **Trabajo futuro:** dar más contexto al **LSTM** (más variables/épocas, secuencias más largas),
+  incorporar variables exógenas (clima: temperatura y lluvias), y desagregar la predicción por
+  departamento.
 
 ## Referencias
 
-> Formato del paper: el que pida SIMBIG (normalmente estilo Springer/CEUR). Usar gestor (Zotero/Mendeley).
+> Formato del paper: el que pida SIMBIG (normalmente estilo Springer/CEUR). Usar gestor
+> (Zotero/Mendeley) y completar autores/revista desde cada enlace.
 
-1. _…_
+1. *Weekly dengue forecasts in Iquitos, Peru; San Juan, Puerto Rico; and Singapore.* PMC7567393 — https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7567393/
+2. *Assessing dengue forecasting methods: a comparative study of statistical models and machine learning techniques in Rio de Janeiro, Brazil.* PMC11984044 — https://pmc.ncbi.nlm.nih.gov/articles/PMC11984044/
+3. *A reproducible ensemble machine learning approach to forecast dengue outbreaks.* Scientific Reports (2024) — https://www.nature.com/articles/s41598-024-52796-9
+4. *Dengue forecasting and outbreak detection in Brazil using LSTM: integrating human mobility and climate factors.* PMC12657288 — https://pmc.ncbi.nlm.nih.gov/articles/PMC12657288/
+5. *Prediction of dengue patients using deep learning methods amid complex weather conditions in Jaipur, India.* Discover Public Health, Springer (2025) — https://link.springer.com/article/10.1186/s12982-025-00448-2
+6. *Dengue Prediction in Latin America Using Machine Learning and the One Health Perspective: A Literature Review.* PMC9611387 — https://pmc.ncbi.nlm.nih.gov/articles/PMC9611387/
+7. *Bayesian hybrid statistical and machine learning models for dengue forecasting in Bangladesh.* medRxiv (2025) — https://www.medrxiv.org/content/10.1101/2025.09.14.25335716
 
 ---
 
@@ -278,11 +341,11 @@ escala logarítmica al volumen para obtener agrupaciones interpretables.
 - [x] Tema con ≥ 10 mil registros (~1M ✔)
 - [x] ≥ 10 características interesantes (sin contar nombre/dirección/ubigeo)
 - [x] Tipo de problema definido (los 3 evaluados; **regresión** es el adecuado)
-- [ ] Estado del arte documentado
-- [x] 5 técnicas comparadas (por abordaje)
-- [x] EDA
-- [x] Comparación con métricas
-- [x] Insights
+- [x] Estado del arte documentado (7 referencias reales; faltan citas completas)
+- [x] 5 técnicas comparadas (6 en regresión, incluyendo LSTM)
+- [x] EDA (general + serie temporal)
+- [x] Comparación con métricas (R²/RMSE/MAE + baseline; F1/Silhouette en secundarios)
+- [x] Insights (5 documentados)
 
 > ✅ **Enfoque decidido:** el proyecto se centra en **regresión / serie temporal** (predicción de
 > casos de dengue por semana), porque las métricas demostraron que es el único abordaje adecuado

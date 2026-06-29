@@ -15,6 +15,9 @@ imbalanced-learn   # SMOTE y manejo de desbalance
 # Interpretabilidad
 shap
 
+# Deep learning (LSTM para series temporales)
+tensorflow
+
 # Entorno / notebooks
 jupyter
 ipykernel
