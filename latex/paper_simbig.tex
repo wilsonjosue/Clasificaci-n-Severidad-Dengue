@@ -59,15 +59,12 @@ Regression and Time-Series Machine Learning Models (2000--2024)}}
   Peruvian Ministry of Health (MINSA) national epidemiological surveillance dataset
   (1{,}029{,}421 individual case records, 2000--2024), we aggregate the data into a
   continuous weekly case time series (1{,}305 points) and frame the task as a
-  \textbf{regression / time-series forecasting} problem. We first justify this framing
-  empirically by comparing the three canonical problem types on the same data: severity
-  classification, department clustering, and case-count regression. Classification of
-  clinical severity shows no usable signal (macro-F1~$\approx0.33$, recall of the
-  \emph{Severe} class~$=0$), and department clustering yields only a weak structure
-  (silhouette~$\approx0.35$), whereas regression is clearly adequate. We then distinguish
-  two notions of ``window'': the \emph{input window}~$W$ (past weeks used as features,
-  where the error decreases and plateaus) and the \emph{forecast horizon}~$H$ (weeks
-  ahead, where the error increases monotonically), selecting $W=3$ and $H=1$ via
+  \textbf{regression / time-series forecasting} problem. We build the supervised problem
+  with a \textbf{sliding window}:
+  for each target week we \emph{add $W$ columns holding the $W$ previous weekly counts}
+  (lag features). We explicitly separate this \emph{input window}~$W$ (past weeks used as
+  features, where the error decreases and plateaus) from the \emph{forecast horizon}~$H$
+  (weeks ahead, where the error increases monotonically), selecting $W=3$ and $H=1$ via
   elbow-type criteria. We compare six techniques --- Ridge, Lasso, Multilayer Perceptron,
   Random Forest, Gradient Boosting and an LSTM network. The best model is a regularized
   linear model (Ridge, \Rsq{}~$=0.975$, RMSE~$=671$), which outperforms the na\"ive
@@ -93,18 +90,16 @@ to the Yaku cyclone. Accurate short-term forecasts of weekly case counts support
 \textbf{early-warning systems}: they let public-health authorities anticipate outbreaks
 and allocate resources in advance.
 
-A frequent methodological pitfall is choosing the modeling paradigm (classification,
-regression or clustering) by intuition rather than by evidence. In this work we
-\textbf{empirically test all three paradigms} on the same national dataset and use the
-metrics appropriate to each to decide which is adequate. Two of them ---severity
-classification at the patient level and department-level clustering--- proved inadequate,
-so the study \textbf{centers on regression / time-series forecasting}, with the other two
-reported as comparative experiments that justify this choice. We then develop and compare
-regression / time-series models for one-week-ahead case forecasting.
+We frame Peruvian dengue surveillance as a \textbf{regression / time-series forecasting}
+problem and validate the methods required to solve it: sliding-window feature construction,
+model selection, the input-window / forecast-horizon analysis, and comparison against a
+na\"ive persistence baseline. We develop and compare several regression / time-series
+models for one-week-ahead case forecasting.
 
 \paragraph{Contributions.}
-(i) An evidence-based justification of the regression framing for this dataset, obtained
-by running and measuring all three paradigms;
+(i) A fully validated regression pipeline for weekly dengue forecasting from case history
+alone, from sliding-window feature construction (adding $W$ lag columns) to temporal
+evaluation;
 (ii) a clear separation between the \emph{input window} and the \emph{forecast horizon},
 which are often conflated in time-series practice;
 (iii) a six-technique comparison that includes an LSTM network; and
@@ -213,10 +208,10 @@ We use the MINSA national dengue epidemiological surveillance dataset (\emph{Dat
 Abiertos}, Peru),\footnote{\scriptsize\url{https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol\%C3\%B3gica-de-dengue}}
 covering 2000--2024 with \textbf{1{,}029{,}421} individual case records and 14 columns
 (department, province, district, locality, disease type, year, epidemiological week,
-ICD-10 code, health directorate, geocode, age, age unit, sex). Identifier fields (geocode,
-locality code) are discarded. The ICD-10 \texttt{diagnostic} field is \textbf{excluded to
-prevent data leakage}, as it maps almost one-to-one with the clinical severity label.
-Table~\ref{tab:dict} summarizes the variable dictionary.
+ICD-10 code, health directorate, geocode, age, age unit, sex). Identifier and
+high-cardinality fields (geocode, locality code, district) are discarded, as are the
+clinical categorical fields (disease type, ICD-10 code), which are irrelevant to the weekly
+case count. Table~\ref{tab:dict} summarizes the variable dictionary.
 
 \begin{table}[t]
 \centering\footnotesize
@@ -229,10 +224,10 @@ Variable & Type & Feature? \\
 department & categorical & \checkmark{} (aggregated) \\
 province & categorical & \checkmark{} (aggregated) \\
 district / locality & categorical/text & \ding{55}\ high cardinality \\
-disease (severity) & categorical & target of classif.\ exp. \\
+disease type & categorical & \ding{55}\ not used \\
 year & numeric & \checkmark{} $\to$ basis of \texttt{cases} \\
 week (1--53) & numeric & \checkmark{} $\to$ basis of \texttt{cases} \\
-diagnostic (ICD-10) & categorical & \ding{55}\ leakage \\
+diagnostic (ICD-10) & categorical & \ding{55}\ not used \\
 diresa & categorical & \checkmark \\
 geocode / loc.\ code & ID & \ding{55}\ invalid \\
 age / age unit & numeric/cat. & \checkmark{} (normalized) \\
@@ -251,8 +246,34 @@ synthetic or imputed value: the sum of the series equals the number of source re
 introduced by us, is that counts depend on MINSA passive surveillance, with possible
 under-reporting.
 
-\subsection{Two notions of ``window''}
-We explicitly distinguish two concepts that behave oppositely:
+\subsection{Candidate variables and univariate framing}
+The raw dataset exposes more than ten candidate fields (department, province, age, sex,
+\dots), but a relation (correlation) analysis shows that none of them carries usable signal
+for the aggregate weekly count. Aggregating each candidate at the weekly level and
+correlating it with the case count (Fig.~\ref{fig:corr}) yields near-zero coefficients for
+the demographic variables ---mean age $r=0.06$, share of female cases $r=0.11$--- and only a
+weak $r=-0.14$ for the calendar week. The single non-trivial value, the number of reporting
+departments ($r=0.47$), is not an exogenous predictor: it is itself an \emph{outcome} of an
+outbreak and is strongly collinear with the time trend ($r=0.79$). We therefore frame the
+task as a \textbf{purely univariate} forecasting problem, using only past values (lags) of
+the case count as features. This is a deliberate design decision ---not an omission--- and it
+is what the data actually support.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{01_Regresion/corr_candidatas.png}
+\caption{Relation (Pearson correlation) matrix of the candidate variables aggregated at the
+weekly level against the weekly case count. Demographic variables (mean age, \% female) are
+essentially uncorrelated with the count, and the number of reporting departments is collinear
+with the time trend, so no exogenous tabular feature is retained.}
+\label{fig:corr}
+\end{figure}
+
+\subsection{The sliding window and its two notions}
+Operationally, building a \emph{window} means \textbf{adding $N$ new columns to the
+table, one per previous measurement}: to predict the count of a given week we append, as
+lag features, the counts of the $N$ immediately preceding weeks. On top of this single
+construction, two distinct quantities are involved, and they behave oppositely:
 \begin{itemize}\itemsep1pt
   \item \textbf{Input window $W$}: number of past weeks used as features. The error
   \emph{decreases and plateaus} as $W$ grows (diminishing returns); we select $W$ at the
@@ -265,21 +286,20 @@ This separation matters: the ``error grows with the window'' behavior holds for 
 horizon, not for the input window. We report both analyses (\S\ref{sec:window}).
 
 \subsection{Processing pipeline}
-The end-to-end pipeline comprises seven stages: (1)~\textbf{data cleaning} ---parsing the
-$\sim$1M raw MINSA records, dropping identifier/high-cardinality fields (geocode, locality,
-district) and removing the leaking \texttt{diagnostic} (ICD-10) column; (2)~\textbf{feature
-encoding} ---normalizing age, one-hot encoding department/sex and deriving the
-(year,\,week) temporal index; (3)~\textbf{aggregation} into the continuous weekly
-case-count series (1{,}305 points) for the regression track; (4)~\textbf{correlation /
-autocorrelation analysis} (Pearson matrix for the tabular features, ACF/PACF for the
-series) to select lag features; (5)~\textbf{class balancing} for the classification track
-(class weighting and SMOTE) given the $0.39\%$ \emph{Severe} prevalence; (6)~\textbf{model
-training} with a temporal (non-random) train/test split; and (7)~\textbf{evaluation} with
-task-appropriate metrics and confusion matrices. The same cleaned table feeds the three
-paradigms, so their comparison is fair and reproducible.
+The end-to-end pipeline comprises six stages: (1)~\textbf{data cleaning} ---parsing the
+$\sim$1M raw MINSA records and dropping identifier/high-cardinality and clinical categorical
+fields (geocode, locality, district, disease type, ICD-10); (2)~\textbf{aggregation} into
+the continuous weekly case-count series (1{,}305 points) by grouping on (year,
+epidemiological week); (3)~\textbf{correlation / autocorrelation analysis} (ACF/PACF on the
+series) to select the lag features; (4)~\textbf{sliding-window feature construction}, adding
+the $W$ lag columns that define the supervised problem; (5)~\textbf{model training} with a
+temporal (non-random) train/test split; and (6)~\textbf{evaluation} with regression metrics
+against a na\"ive persistence baseline. The same cleaned series feeds every model, so the
+comparison is fair and reproducible.
 
 \subsection{Models and evaluation}
-A supervised dataset is built as
+A supervised dataset is built with the sliding window described above ---each row is
+augmented with $W$ lag columns holding the $W$ previous weekly counts--- as
 $X=[\,\text{cases}_{t-W},\dots,\text{cases}_{t-1}\,]\to y=\text{cases}_{t+H-1}$.
 We use a \textbf{temporal split} (train on the past, test on the most recent $\approx20\%$,
 i.e.\ 2023--2024), avoiding random splits that would leak future information. We compare
@@ -287,16 +307,6 @@ six techniques: Ridge (L2), Lasso (L1), a Multilayer Perceptron (MLP), Random Fo
 Gradient Boosting, and an LSTM recurrent network with standardized inputs. Performance is
 measured with \textbf{\Rsq{}, RMSE and MAE}, and compared against a \textbf{na\"ive
 persistence baseline} ($\text{cases}_{t+H}=\text{cases}_t$).
-
-\subsection{Secondary experiments (paradigm comparison)}
-To justify the regression framing, we also run two comparative experiments:
-(i)~\textbf{severity classification} (3 classes, excluding \texttt{diagnostic}, with class
-weighting / SMOTE and macro-F1, balanced accuracy and per-class recall), and
-(ii)~\textbf{department clustering} by epidemiological profile (KMeans / Agglomerative,
-evaluated with silhouette and Davies--Bouldin, with PCA visualization), excluding cold
-Andean departments with near-zero cases. These two paradigms turned out inadequate; full
-details are in the project notebooks \texttt{02\_Classification} and
-\texttt{04\_Clustering}.
 
 %==============================================================================
 \section{Experiments and Results}
@@ -495,134 +505,6 @@ series.}
 \label{fig:forecast}
 \end{figure*}
 
-\subsection{Paradigm comparison (why regression)}
-Table~\ref{tab:paradigm} summarizes the three paradigms run on the same data. Only
-regression is clearly adequate.
-
-\begin{table}[t]
-\centering\footnotesize
-\caption{Comparison of the three problem types on the same dataset.}
-\label{tab:paradigm}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-Paradigm & Main metric & Result & Verdict \\
-\midrule
-Classification & macro-F1 / recall \emph{Severe} & 0.33 / 0.00 & Not adequate \\
-\textbf{Regression} & \Rsq{} & \textbf{0.975} & \textbf{Adequate} \\
-Clustering & Silhouette & 0.35 & Weak / not adeq. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\paragraph{Classification of severity (not adequate).}
-With the 3-class severity target (88.9\% \emph{No signs} / 10.7\% \emph{Warning signs} /
-\textbf{0.39\% \emph{Severe}}) and \texttt{diagnostic} excluded, no model beats the trivial
-``always majority class'' baseline (accuracy~$0.889$). Models collapse to the majority class
-and the recall of the \emph{Severe} class is essentially $0$ (Table~\ref{tab:clf}). The
-demographic and spatio-temporal variables simply do not carry enough signal to discriminate
-individual clinical severity --- a valid, reportable negative result.
-
-\begin{table}[t]
-\centering\footnotesize
-\caption{Severity classification (3 classes, \texttt{diagnostic} excluded).}
-\label{tab:clf}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Model & Acc. & Bal.\ Acc & F1-macro & Rec.\ \emph{Severe} \\
-\midrule
-Random Forest & 0.790 & 0.374 & 0.365 & 0.000 \\
-LightGBM & 0.698 & 0.411 & 0.364 & 0.034 \\
-XGBoost & 0.886 & 0.344 & 0.337 & 0.000 \\
-MLP & 0.887 & 0.342 & 0.333 & 0.000 \\
-Logistic (balanced) & 0.446 & 0.452 & 0.281 & 0.517 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The confusion matrices make the failure mode explicit. In the three-class setting
-(Fig.~\ref{fig:cm3}), the model behaves as a ``sandwich'' collapse: the intermediate
-\emph{Warning signs} class and the \emph{Severe} class are almost entirely absorbed into the
-dominant \emph{No signs} column (e.g.\ $54{,}972$ \emph{Warning} cases and $1{,}738$
-\emph{Severe} cases are predicted as \emph{No signs}), so the minority classes are never
-recovered. Because the operationally relevant question is really binary ---will a case become
-\emph{severe} or not?--- we also recast the problem as a two-class detector and tuned the
-decision threshold to maximize the F1 of the \emph{Severe} class (Fig.~\ref{fig:cm2}). Even
-at the optimal extreme-risk frontier ($\tau=0.0076$) the detector recovers only $196$ of
-$1{,}753$ severe cases at the cost of $14{,}193$ false alarms: an unusable precision/recall
-trade-off. This confirms, now per class, that demographic and spatio-temporal variables do
-not encode individual clinical severity.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.82\linewidth]{02_Clasificacion/output_0_2.png}
-\caption{Three-class severity confusion matrix (\emph{No signs} / \emph{Warning signs} /
-\emph{Severe}). The minority classes collapse into the majority column --- the ``dimensional
-collision'' that yields recall~$\approx0$ for \emph{Severe}.}
-\label{fig:cm3}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.78\linewidth]{02_Clasificacion/output_0_1.png}
-\caption{Binary re-framing (\emph{Not severe} vs.\ \emph{Severe}) at the F1-optimal threshold
-$\tau=0.0076$. Even the best operating point detects only $196/1{,}753$ severe cases with
-$14{,}193$ false positives, confirming the absence of a usable severity signal.}
-\label{fig:cm2}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{02_Clasificacion/output_0_4.png}
-\caption{Top-15 feature importances (XGBoost) for severe-dengue risk. Importance is
-dominated by \emph{region} (Tumbes, Piura, La Libertad, Madre de Dios\dots) and by year/week,
-i.e.\ purely spatio-temporal context, while individual demographics (age, sex) contribute
-little --- consistent with the negative classification result.}
-\label{fig:fi}
-\end{figure}
-
-\paragraph{Department clustering (weak).}
-We build a per-department profile (volume, mean age, \% female, severity rate, peak week)
-and cluster with KMeans / Agglomerative, validating with PCA. After excluding four cold
-Andean departments with near-zero cases (Moquegua, Apur\'imac, Arequipa, Puno) that
-artificially inflated the silhouette, and applying a log scale to volume, the optimal
-number of groups is $K=2$ (elbow and silhouette). The resulting structure is \emph{weak}
-(silhouette~$=0.35$, Davies--Bouldin~$=1.12$): the two groups differ mainly by peak week
-(early-peak coastal regions $\sim$week~14 vs.\ late-peak jungle regions $\sim$week~40),
-not by sharp qualitative profiles. The dataset is therefore not clearly adequate for
-clustering.
-
-The model-selection curves in Fig.~\ref{fig:elbow} reflect this weakness directly: the
-inertia (elbow) curve bends only gently and the average silhouette is highest at $K=2$
-($\approx0.33$) and then \emph{decreases} monotonically for $K\ge3$, so no rich multi-group
-structure emerges --- the data merely split into two coarse families. The PCA projection in
-Fig.~\ref{fig:pca} makes this interpretable: the first two principal components capture
-$49.1\%$ and $21.6\%$ of the variance, and the two clusters separate mainly along the
-horizontal axis into \emph{early-peak coastal/highland} departments (Lima, La Libertad,
-Piura, Ica, Tumbes\dots, cluster~0) versus \emph{late-peak jungle} departments (Loreto,
-Ucayali, San Mart\'in, Madre de Dios, cluster~1). The separation is geographically meaningful
-but statistically modest (silhouette~$=0.35$), confirming that clustering offers description
-rather than a strong predictive partition.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.95\textwidth]{03_Clustering/output_0_1.png}
-\caption{Cluster-number selection for the department-level profiles (notebook
-\texttt{03\_Clustering}). \emph{Left:} elbow (intra-cluster inertia) curve; \emph{right:}
-average silhouette, which peaks at $K=2$ and declines for larger $K$, indicating only a weak
-two-group structure.}
-\label{fig:elbow}
-\end{figure*}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{03_Clustering/output_0_3.png}
-\caption{PCA projection of the Peruvian departments coloured by cluster ($K=2$). The first
-two components explain $49.1\%+21.6\%$ of the variance. Cluster~1 isolates the late-peak
-jungle departments (Loreto, Ucayali, San Mart\'in, Madre de Dios) from the early-peak
-coastal/highland group, an epidemiologically coherent but weak separation.}
-\label{fig:pca}
-\end{figure}
-
 %==============================================================================
 \section{Discussion}
 %==============================================================================
@@ -638,9 +520,9 @@ yields diminishing returns (RMSE $864\to671\to660$).
 models surpass the LSTM and the tree ensembles for this dataset and horizon.
 \textbf{(iv) Case history alone suffices for short-term forecasting:} a reliable one-week-ahead
 forecast ($R^2=0.975$) is attainable without any exogenous covariate.
-\textbf{(v) Evidence over intuition:} testing the three paradigms with their own metrics
-\emph{demonstrates}, rather than assumes, what the dataset supports --- strong temporal
-structure, but no individual-severity signal and only weak geographic clustering.
+\textbf{(v) Growth-rate modeling breaks the extrapolation ceiling:} training on the weekly
+change ($\Delta y_t$) rather than on the absolute level lets even tree models follow the
+2023--2024 surge, confirming that the signal lives in the short-term dynamics of the series.
 \textbf{(vi) Window semantics matter:} conflating the input window with the forecast horizon
 leads to wrong conclusions, since their errors move in opposite directions.
 
@@ -671,6 +553,35 @@ different reason: they cannot \emph{extrapolate} beyond the value range seen in 
 during the 2023--2024 surge they saturate at historical maxima, while linear autoregressive
 models follow the trend.
 However, as a methodological contribution, we demonstrated that this structural ceiling can be broken using a \textbf{first-order differencing transformation} ($\Delta y_t = y_t - y_{t-1}$). By training the Random Forest to predict the weekly \emph{change} rather than the absolute count, and reconstructing the forecast as $\hat{y}t = y{t-1} + \Delta\hat{y}_t$, its performance surged from $R^2=0.444$ to $R^2=0.960$, effectively matching the linear models. This confirms that the predictable signal lives in the short-term dynamics (growth rate) rather than the absolute magnitude.
+
+\subsection{Regression coefficients (feature importance)}
+Because the final model is linear, its coefficients directly quantify the importance of each
+lag. Table~\ref{tab:coef} reports the standardized Ridge and Lasso weights for the model of
+the weekly change $\Delta y_t$. Two facts stand out. First, \textbf{Lasso drives $t{-}2$ and
+the seasonal $t{-}52$ exactly to zero}, so only $t{-}1$ and $t{-}3$ retain signal ---an
+independent confirmation that a short window suffices. Second, the surviving coefficients
+have \textbf{opposite signs} (positive on $t{-}1$, negative on $t{-}3$): the model predicts
+the weekly change from the recent \emph{slope} of the curve ---the gap between the most recent
+level and the level three weeks earlier--- which is exactly the linear-autoregressive,
+growth-rate behavior anticipated by the ACF/PACF diagnostic.
+
+\begin{table}[t]
+\centering\footnotesize
+\caption{Standardized linear-model coefficients (target: weekly change $\Delta y_t$). Lasso
+zeroes out $t{-}2$ and the seasonal lag, leaving a compact two-lag model.}
+\label{tab:coef}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Lag feature & Ridge & Lasso \\
+\midrule
+$t-1$ & $632.93$ & $561.02$ \\
+$t-2$ & $24.45$ & $0.00$ \\
+$t-3$ & $-745.64$ & $-646.67$ \\
+$t-52$ (seasonal) & $5.10$ & $0.00$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Limitations}
 \begin{itemize}\itemsep1pt
   \item \textbf{No climate variables} (temperature, rainfall, humidity), which the literature
@@ -681,19 +592,18 @@ However, as a methodological contribution, we demonstrated that this structural 
   ($H=1$); accuracy degrades quickly beyond that.
   \item \textbf{Single data source:} the data come only from MINSA passive surveillance, with
   possible under-reporting and reporting delays.
-  \item \textbf{Secondary paradigms:} severity classes are extremely imbalanced
-  (\emph{Severe}~$=0.39\%$) and the department clustering structure is weak even after cleaning
-  outlier regions.
 \end{itemize}
 
 %==============================================================================
 \section{Conclusions and Future Work}
 %==============================================================================
-Using the MINSA national dataset, the data are adequate for \textbf{regression /
-time-series forecasting} (Ridge, \Rsq{}~$=0.975$, beating the na\"ive baseline), but
-\emph{not} for severity classification (recall of \emph{Severe}~$=0$) nor clustering
-(silhouette~$=0.35$). The best model is a simple, interpretable regularized linear model,
-which even surpasses the LSTM at a one-week horizon.
+Using the MINSA national dataset, we framed weekly dengue forecasting as a
+\textbf{regression / time-series} problem and validated the methods needed to solve it
+(Ridge, \Rsq{}~$=0.975$, beating the na\"ive baseline). The best model is a simple,
+interpretable regularized linear model, which even surpasses the LSTM at a one-week horizon.
+Its coefficients are themselves informative: Lasso retains only the $t{-}1$ and $t{-}3$ lags
+---zeroing $t{-}2$ and the seasonal term--- and their opposite signs show that the forecast
+is driven by the recent growth rate of the series (Table~\ref{tab:coef}).
 Furthermore, we demonstrated that a \textbf{first-order differencing transformation}
 ($\Delta y_t = y_t - y_{t-1}$) allows tree-based models to extrapolate beyond their training
 range: Random Forest surged from $R^2=0.444$ to $R^2=0.960$, matching the linear models and
