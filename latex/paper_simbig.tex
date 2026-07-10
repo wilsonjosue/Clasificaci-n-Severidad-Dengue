@@ -1,7 +1,7 @@
 %==============================================================================
 %  SIMBIG 2026 -- Long paper
-%  Weekly Dengue Case Forecasting in Peru Using Regression and
-%  Time-Series Machine Learning Models (2000-2024)
+%  Dengue Case Forecasting in Peru Using
+%  Time-Series Machine Learning Models
 %
 %  NOTE ON THE DOCUMENT CLASS
 %  --------------------------
@@ -36,8 +36,8 @@
 \newcommand{\Rsq}{$R^2$}
 \setlength{\parskip}{2pt}
 
-\title{\vspace{-1.0cm}\textbf{Weekly Dengue Case Forecasting in Peru Using\\
-Regression and Time-Series Machine Learning Models (2000--2024)}}
+\title{\vspace{-1.0cm}\textbf{Dengue Case Forecasting in Peru Using\\
+Time-Series Machine Learning Models}}
 
 \author{
   Wilson J. Turpo Huanca \and Jhastyn J. Payehuanca Riquelme \and Jeanpiero S. Huamani Condori\\
@@ -61,12 +61,14 @@ Regression and Time-Series Machine Learning Models (2000--2024)}}
   continuous weekly case time series (1{,}305 points) and frame the task as a
   \textbf{regression / time-series forecasting} problem. We build the supervised problem
   with a \textbf{sliding window}:
-  for each target week we \emph{add $W$ columns holding the $W$ previous weekly counts}
-  (lag features). We explicitly separate this \emph{input window}~$W$ (past weeks used as
+  for each target week we \emph{add $W$ columns holding the case counts of the $W$
+  immediately preceding weeks} (weekly lag features; the window spans whole calendar
+  weeks, not the days inside a week). We explicitly separate this \emph{input window}~$W$ (past weeks used as
   features, where the error decreases and plateaus) from the \emph{forecast horizon}~$H$
   (weeks ahead, where the error increases monotonically), selecting $W=3$ and $H=1$ via
-  elbow-type criteria. We compare six techniques --- Ridge, Lasso, Multilayer Perceptron,
-  Random Forest, Gradient Boosting and an LSTM network. The best model is a regularized
+  elbow-type criteria. We compare six machine learning techniques for regression --- Ridge,
+  Lasso, Multilayer Perceptron, Random Forest, Gradient Boosting and an LSTM network.
+  Surprisingly, the best model is a regularized
   linear model (Ridge, \Rsq{}~$=0.975$, RMSE~$=671$), which outperforms the na\"ive
   persistence baseline (\Rsq{}~$=0.959$) and, notably, the LSTM (\Rsq{}~$=0.560$). We
   conclude that, using case history alone and a one-week horizon, simple linear models
@@ -86,7 +88,9 @@ Regression and Time-Series Machine Learning Models (2000--2024)}}
 Dengue, transmitted by the \emph{Aedes aegypti} mosquito, causes recurrent epidemics in
 Peru, with endemic regions such as Loreto, Piura and Madre de Dios and a marked seasonal
 pattern. The 2023--2024 period saw an unprecedented surge in reported cases, partly linked
-to the Yaku cyclone. Accurate short-term forecasts of weekly case counts support
+to \emph{Cyclone Yaku}, which brought intense rainfall and coastal flooding to northern and
+central Peru in March~2023 and created favourable breeding conditions for \emph{Aedes
+aegypti}~\cite{yaku2023}. Accurate short-term forecasts of weekly case counts support
 \textbf{early-warning systems}: they let public-health authorities anticipate outbreaks
 and allocate resources in advance.
 
@@ -125,9 +129,11 @@ trained in Brazil~\cite{sebastianelli2024}. Table~\ref{tab:sota} summarizes thes
 \textbf{Long horizons via climate and mechanistic components.}
 Lu et~al.~\cite{lu2025} forecast dengue in Selangor (Malaysia) by chaining a multiple
 linear regression with interaction effects (relating climate to the mosquito biting rate),
-an LSTM on the wavelet-denoised residuals, and an SI-SIR compartmental model. Their
+an LSTM on the wavelet-denoised residuals, and an SI-SIR (susceptible--infected /
+susceptible--infected--recovered) compartmental model. Their
 ensemble forecasts with good precision up to about \textbf{60 weeks} ahead
-(MAPE~$=13.97$), far beyond the usual few weeks, but it relies on climate variables and a
+(mean absolute percentage error, MAPE~$=13.97$)~\cite{hyndman2006}, far beyond the usual
+few weeks, but it relies on climate variables and a
 mechanistic model; it also collapses (MAPE~$\approx87$) during the COVID-19 movement
 control order, when historical patterns break.
 
@@ -205,8 +211,8 @@ added.
 
 \subsection{Dataset}
 We use the MINSA national dengue epidemiological surveillance dataset (\emph{Datos
-Abiertos}, Peru),\footnote{\scriptsize\url{https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol\%C3\%B3gica-de-dengue}}
-covering 2000--2024 with \textbf{1{,}029{,}421} individual case records and 14 columns
+Abiertos}, Peru)~\cite{minsa}, covering 2000--2024 with \textbf{1{,}029{,}421}
+individual case records and 14 columns
 (department, province, district, locality, disease type, year, epidemiological week,
 ICD-10 code, health directorate, geocode, age, age unit, sex). Identifier and
 high-cardinality fields (geocode, locality code, district) are discarded, as are the
@@ -215,23 +221,27 @@ case count. Table~\ref{tab:dict} summarizes the variable dictionary.
 
 \begin{table}[t]
 \centering\footnotesize
-\caption{Variable dictionary. \checkmark{}~candidate feature; \ding{55}~identifier / invalid.}
+\caption{Variable dictionary. \checkmark{}~candidate examined; \ding{55}~identifier / invalid.
+No categorical field is ordinally encoded: geographic fields are used only to
+\emph{aggregate} records into the weekly count, and the final model is purely univariate
+(lags of the count). Candidate variables marked ``EDA only'' were inspected in the
+correlation analysis but not fed to the model.}
 \label{tab:dict}
 \begin{tabular}{@{}lll@{}}
 \toprule
 Variable & Type & Feature? \\
 \midrule
-department & categorical & \checkmark{} (aggregated) \\
-province & categorical & \checkmark{} (aggregated) \\
+department & categorical & \checkmark{} (aggregation only) \\
+province & categorical & \checkmark{} (aggregation only) \\
 district / locality & categorical/text & \ding{55}\ high cardinality \\
 disease type & categorical & \ding{55}\ not used \\
 year & numeric & \checkmark{} $\to$ basis of \texttt{cases} \\
 week (1--53) & numeric & \checkmark{} $\to$ basis of \texttt{cases} \\
 diagnostic (ICD-10) & categorical & \ding{55}\ not used \\
-diresa & categorical & \checkmark \\
+diresa & categorical & \checkmark{} (aggregation only) \\
 geocode / loc.\ code & ID & \ding{55}\ invalid \\
-age / age unit & numeric/cat. & \checkmark{} (normalized) \\
-sex & categorical & \checkmark \\
+age / age unit & numeric/cat. & \checkmark{} (normalized, EDA only) \\
+sex & categorical & \checkmark{} (binary, EDA only) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -247,8 +257,11 @@ introduced by us, is that counts depend on MINSA passive surveillance, with poss
 under-reporting.
 
 \subsection{Candidate variables and univariate framing}
-The raw dataset exposes more than ten candidate fields (department, province, age, sex,
-\dots), but a relation (correlation) analysis shows that none of them carries usable signal
+The raw dataset exposes fourteen raw fields ---department, province, district, locality,
+disease type, year, epidemiological week, ICD-10 diagnostic code, health directorate
+(DIRESA), geocode, locality code, age, age unit and sex (Table~\ref{tab:dict})---, of
+which more than ten qualify as candidate explanatory variables. A relation (correlation)
+analysis, however, shows that none of them carries usable signal
 for the aggregate weekly count. Aggregating each candidate at the weekly level and
 correlating it with the case count (Fig.~\ref{fig:corr}) yields near-zero coefficients for
 the demographic variables ---mean age $r=0.06$, share of female cases $r=0.11$--- and only a
@@ -272,7 +285,12 @@ with the time trend, so no exogenous tabular feature is retained.}
 \subsection{The sliding window and its two notions}
 Operationally, building a \emph{window} means \textbf{adding $N$ new columns to the
 table, one per previous measurement}: to predict the count of a given week we append, as
-lag features, the counts of the $N$ immediately preceding weeks. On top of this single
+lag features, the counts of the $N$ immediately preceding weeks. Recasting a series as a
+supervised problem through lagged (window) features and then scanning increasing window
+lengths is standard practice in time-series forecasting~\cite{hyndmanFPP,boxjenkins}; we
+start from a small window ($W=3$) because the partial autocorrelation of the series cuts
+off after lag~3 (\S\ref{sec:window}), the classical Box--Jenkins criterion for selecting
+the order of an autoregressive model~\cite{boxjenkins}. On top of this single
 construction, two distinct quantities are involved, and they behave oppositely:
 \begin{itemize}\itemsep1pt
   \item \textbf{Input window $W$}: number of past weeks used as features. The error
@@ -295,7 +313,8 @@ series) to select the lag features; (4)~\textbf{sliding-window feature construct
 the $W$ lag columns that define the supervised problem; (5)~\textbf{model training} with a
 temporal (non-random) train/test split; and (6)~\textbf{evaluation} with regression metrics
 against a na\"ive persistence baseline. The same cleaned series feeds every model, so the
-comparison is fair and reproducible.
+comparison is fair and reproducible. The whole pipeline is implemented in a single public
+notebook (\texttt{01\_Regresion}), from which every figure reported below is exported.
 
 \subsection{Models and evaluation}
 A supervised dataset is built with the sliding window described above ---each row is
@@ -327,7 +346,7 @@ the choice of lag features. Demographically, cases concentrate in working ages w
 50/50 sex split, so demographic variables add little signal for the aggregate weekly count.
 
 % NOTE: Figures 2-3 below are schematic renderings of the EDA statistics reported above.
-%       Replace them with the actual PNG exports from notebook 03_Regresion if desired:
+%       Replace them with the actual PNG exports from notebook 01_Regresion if desired:
 %       \includegraphics[width=\linewidth]{seasonality.png} etc.
 
 \begin{figure}[H]
@@ -394,7 +413,7 @@ The combined ACF/PACF diagnostic in Fig.~\ref{fig:acf} is decisive for the model
 strategy. The slowly decaying ACF confirms that the series is strongly persistent (it is
 \emph{not} white noise), while the sharp PACF cut-off after lag~3 indicates that, once the
 three most recent weeks are known, earlier weeks add almost no \emph{new} information. In
-classical Box--Jenkins terms this points to an AR(3)-like structure, which is exactly the
+classical Box--Jenkins terms~\cite{boxjenkins} this points to an AR(3)-like structure, which is exactly the
 linear-autoregressive regime in which a regularized linear model is expected to perform
 well --- a prediction later confirmed by the experiments (\S\ref{sec:window}).
 
@@ -481,7 +500,8 @@ linear models and the MLP exceed it.}
 
 To make the quantitative comparison tangible, Fig.~\ref{fig:forecast} overlays the actual
 predictions on the most recent test period (2023--2024), where the two explosive outbreaks
----including the \emph{Yaku} cyclone peak of early 2023 (vertical dotted line)--- push the
+---including the peak that followed \emph{Cyclone Yaku} in early 2023~\cite{yaku2023}
+(vertical dotted line)--- push the
 series far above any historical level. The figure conveys two messages. First, the
 \textbf{na\"ive persistence baseline} (orange) is already a strong competitor precisely
 because of the very high lag-1 autocorrelation: predicting ``next week $=$ this week'' is
@@ -498,8 +518,8 @@ itself, not in its absolute magnitude.
 \caption{One-week-ahead forecasts over the temporal test period (2023--2024), obtained in
 notebook \texttt{01\_Regresion}. The black curve is the observed MINSA weekly count; the
 Ridge regression (via differencing) and the na\"ive persistence baseline closely follow the
-two out-of-distribution outbreaks, including the exponential \emph{Yaku} peak (dotted
-vertical line). Modeling the growth rate lets even linear and tree models extrapolate beyond
+two out-of-distribution outbreaks, including the exponential peak that followed
+\emph{Cyclone Yaku} (dotted vertical line). Modeling the growth rate lets even linear and tree models extrapolate beyond
 the historical range, supporting the near-linear, strongly autoregressive nature of the
 series.}
 \label{fig:forecast}
@@ -536,7 +556,10 @@ reference architecture for time series. The result is coherent once the setting 
   lags to the next value is almost an identity-plus-trend, i.e.\ nearly \emph{linear}.
   \item \textbf{Near-linear dynamics:} the error grows smoothly and monotonically with the
   horizon, the signature of an essentially linear system, where added nonlinear capacity
-  brings no benefit.
+  brings no benefit. Aggregated at the national weekly level, the series is moreover
+  comparatively smooth ---dominated by broad seasonal waves rather than sharp week-to-week
+  spikes (Fig.~\ref{fig:forecast})--- so a linear mapping between consecutive weeks fits it
+  well.
   \item \textbf{Small feature space:} with only three lag features the LSTM has little
   sequential structure to exploit and tends to overfit, whereas L2 regularization handles the
   collinear lags gracefully.
@@ -628,7 +651,7 @@ Future work follows three concrete directions:
 \end{itemize}
 
 %==============================================================================
-\begin{thebibliography}{9}
+\begin{thebibliography}{99}
 %==============================================================================
 \bibitem{lu2025}
 Lu, X., Teh, S.Y., Tay, C.J., Abu Kassim, N.F., Fam, P.S., Soewono, E.:
@@ -663,10 +686,38 @@ in Jaipur, India. Discover Public Health \textbf{22}(1), 58 (2025).
 \url{https://doi.org/10.1186/s12982-025-00448-2}
 
 \bibitem{tft2026}
-Application of a Temporal Fusion Transformer and long-term climate and disease data to
+Pillay, M.T., Le, M.T.Q., Takamatsu, Y., Phong, T.V., Kgalane, N., Minakawa, N.:
+Application of a temporal fusion transformer and long-term climate and disease data to
 assess the predictive power and understand the drivers for malaria and dengue.
 International Journal of Environmental Research and Public Health \textbf{23}(1), 75 (2026).
-\url{https://doi.org/10.3390/ijerph23010075} % verify author list / DOI before submission
+\url{https://doi.org/10.3390/ijerph23010075}
+
+\bibitem{minsa}
+Ministerio de Salud del Per\'u (MINSA), Centro Nacional de Epidemiolog\'ia, Prevenci\'on y
+Control de Enfermedades: Vigilancia epidemiol\'ogica de dengue. Plataforma Nacional de
+Datos Abiertos, Lima, Peru (2024).
+\url{https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol\%C3\%B3gica-de-dengue}
+
+\bibitem{boxjenkins}
+Box, G.E.P., Jenkins, G.M., Reinsel, G.C., Ljung, G.M.:
+Time Series Analysis: Forecasting and Control, 5th edn. Wiley, Hoboken, NJ (2015).
+
+\bibitem{hyndmanFPP}
+Hyndman, R.J., Athanasopoulos, G.:
+Forecasting: Principles and Practice, 3rd edn. OTexts, Melbourne (2021).
+\url{https://otexts.com/fpp3/}
+
+\bibitem{hyndman2006}
+Hyndman, R.J., Koehler, A.B.:
+Another look at measures of forecast accuracy. International Journal of Forecasting
+\textbf{22}(4), 679--688 (2006). \url{https://doi.org/10.1016/j.ijforecast.2006.03.001}
+
+\bibitem{yaku2023}
+Munayco, C.V., Valderrama Rosales, B.Y., Mateo Lizarbe, S.Y., Yon Fabian, C.R., Pe\~na
+S\'anchez, R., V\'asquez S\'anchez, C.H., Garc\'ia, M.P., Padilla-Rojas, C., Su\'arez, V.,
+S\'anchez-Gonz\'alez, L., Jones, F.K., Kohatsu, L., Adams, L.E., Morgan, J., Paz-Bailey, G.:
+Notes from the field: dengue outbreak --- Peru, 2023. MMWR Morbidity and Mortality Weekly
+Report \textbf{73}(4), 86--88 (2024). \url{https://doi.org/10.15585/mmwr.mm7304a4}
 \end{thebibliography}
 
 \end{document}
